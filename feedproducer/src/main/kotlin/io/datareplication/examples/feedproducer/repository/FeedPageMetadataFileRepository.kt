@@ -11,6 +11,10 @@ class FeedPageMetadataFileRepository(private val path: Path) : FeedPageMetadataR
         TODO("Not yet implemented")
     }
 
+    // TODO note: when saving pages, it is ok to first extend a separate "index of pages with no next link", then save
+    //  the pages, then shrink the index
+    //  then we try to load every page in the index and filter out any that do have a next link
+    //  that's fully consistent
     override fun getWithoutNextLink(): CompletionStage<MutableList<FeedPageMetadataRepository.PageMetadata>> {
         TODO("Not yet implemented")
     }

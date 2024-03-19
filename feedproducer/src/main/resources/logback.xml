@@ -4,6 +4,7 @@
             <pattern>%date{"HH:mm:ss.SSS"} %highlight(%-5level) - %cyan([%file:%line]) - %message%n%xException</pattern>
         </encoder>
     </appender>
+    <logger name="io.datareplication" level="DEBUG"/>
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
     </root>
