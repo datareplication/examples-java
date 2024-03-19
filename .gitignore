@@ -4,6 +4,8 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+**/resources/local.conf
+
 # IDEs
 .idea
 .apt_generated
