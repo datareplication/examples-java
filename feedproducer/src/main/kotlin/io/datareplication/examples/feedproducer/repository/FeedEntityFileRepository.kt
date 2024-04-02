@@ -24,9 +24,6 @@ import java.util.concurrent.CompletionStage
 import kotlin.jvm.optionals.getOrNull
 
 @Serializable
-private data class PageIndex(val items: List<String>)
-
-@Serializable
 private data class StoredEntity(
     val operationType: String,
     val contentId: String,
@@ -88,6 +85,11 @@ private fun Entity<FeedEntityHeader>.fileName(): String {
     return "${timestamp}_${header().contentId().value()}"
 }
 
+private fun FeedEntityRepository.PageAssignment.fileName(): String {
+    val timestamp = lastModified().value().toString()
+    return "${timestamp}_${contentId().value()}"
+}
+
 private fun PageId?.indexFileName(): String = if (this != null) {
     "index-page-${value()}"
 } else {
@@ -132,7 +134,7 @@ class FeedEntityFileRepository(
 
     private fun getFromIndex(pageId: PageId?): List<StoredEntity> {
         val p = path.resolve(pageId.indexFileName())
-        return loadIfExist<PageIndex>(p)
+        return loadIfExist<Index>(p)
             ?.items
             .orEmpty()
             .sorted()
@@ -150,6 +152,8 @@ class FeedEntityFileRepository(
     //  ideally the API would be changed to make this more explicitly ok
     override fun savePageAssignments(assignments: List<FeedEntityRepository.PageAssignment>): CompletionStage<Void> =
         coro.future {
-            assignments.groupBy { it.pageId().getOrNull() }
+            assignments
+                .groupBy { it.pageId().getOrNull() }
+
         }
 }

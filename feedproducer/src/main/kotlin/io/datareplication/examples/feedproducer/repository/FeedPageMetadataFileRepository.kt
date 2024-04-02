@@ -15,9 +15,6 @@ import kotlin.io.path.deleteIfExists
 import kotlin.jvm.optionals.getOrNull
 
 @Serializable
-private data class EmptyNextLinkIndex(val items: List<String>)
-
-@Serializable
 private data class StoredPage(
     val pageId: String,
     val lastModified: String,
@@ -72,7 +69,7 @@ class FeedPageMetadataFileRepository(
     //  that's fully consistent
     override fun getWithoutNextLink(): CompletionStage<MutableList<FeedPageMetadataRepository.PageMetadata>> =
         coro.future {
-            loadIfExist<EmptyNextLinkIndex>(emptyNextLinkIndex)
+            loadIfExist<Index>(emptyNextLinkIndex)
                 ?.items
                 .orEmpty()
                 .mapNotNull { id ->
@@ -83,17 +80,18 @@ class FeedPageMetadataFileRepository(
         }
 
     override fun save(pages: List<FeedPageMetadataRepository.PageMetadata>): CompletionStage<Void> = coro.future {
-        val newPagesWithoutNextLink = pages.filter { it.next().isEmpty }.map { it.pageId().value() }
-        val oldPagesWithoutNextLink = loadIfExist<EmptyNextLinkIndex>(emptyNextLinkIndex)?.items.orEmpty()
-        val beforeIndex = EmptyNextLinkIndex(newPagesWithoutNextLink.union(oldPagesWithoutNextLink).toList())
-        replaceAtomic(emptyNextLinkIndex, beforeIndex)
+        val initialIndex = loadIfExist<Index>(emptyNextLinkIndex).orEmpty()
+        val allIds = pages.map { it.pageId().value() }.toSet()
+        val contained = pages.filter { it.next().isEmpty }.map { it.pageId().value() }.toSet()
+        val newIndex1 = initialIndex.extend(contained)
+        replaceAtomic(emptyNextLinkIndex, newIndex1)
         for (page in pages) {
             val p = path.resolve(page.pageId().fileName())
             val stored = page.toStored()
             replaceAtomic(p, stored)
         }
-        val afterIndex = EmptyNextLinkIndex(newPagesWithoutNextLink)
-        replaceAtomic(emptyNextLinkIndex, afterIndex)
+        val newIndex2 = newIndex1.shrink(contained, allIds)
+        replaceAtomic(emptyNextLinkIndex, newIndex2)
         null
     }
 
