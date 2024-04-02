@@ -21,8 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
-import kotlin.io.path.Path
-import kotlin.io.path.createDirectories
+import java.util.Properties
 import kotlin.time.Duration
 import kotlin.time.toKotlinDuration
 
@@ -51,14 +50,15 @@ suspend fun assignPagesTask(interval: Duration, feedProducer: FeedProducer) {
 
 fun main(args: Array<String>) {
     val config = ConfigFactory.load()
-    val hikariConfig = HikariConfig().apply {
-        jdbcUrl = config.getString("db.url")
-        maximumPoolSize = 1
-        connectionTestQuery = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;"
-        driverClassName = "org.sqlite.JDBC"
+    val jdbc = run {
+        val props = Properties()
+        for (entry in config.getConfig("db").entrySet()) {
+            props[entry.key] = entry.value.unwrapped()
+        }
+        val dbConfig = HikariConfig(props)
+        val dataSource = HikariDataSource(dbConfig)
+        NamedParameterJdbcTemplate(dataSource)
     }
-    val dataSource = HikariDataSource(hikariConfig)
-    val jdbc = NamedParameterJdbcTemplate(dataSource)
 
     runBlocking {
         val feedEntityRepository = FeedEntityJdbcRepository(jdbc, this)

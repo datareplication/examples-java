@@ -33,7 +33,7 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.3")
     implementation("com.typesafe:config:1.4.3")
     implementation("com.zaxxer:HikariCP:5.1.0")
-    implementation("org.hsqldb:hsqldb:2.7.2")
+    implementation("org.postgresql:postgresql:42.7.3")
     implementation("org.xerial:sqlite-jdbc:3.45.2.0")
     implementation("org.springframework:spring-jdbc:6.1.5")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

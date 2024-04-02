@@ -21,24 +21,6 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import kotlin.jvm.optionals.getOrNull
 
-/*
-
-private data class StoredEntity(
-    val operationType: String,
-    val contentId: String,
-    val extraHeaders: Map<String, List<String>>,
-    val lastModified: String,
-    val originalLastModified: String?,
-    val pageId: String?,
-    val contentLength: Long,
-    val contentType: String,
-    val body: String
-) {
-
-
- */
-
-
 class FeedEntityJdbcRepository(
     private val jdbc: NamedParameterJdbcTemplate,
     private val coro: CoroutineScope
@@ -57,15 +39,17 @@ CREATE TABLE IF NOT EXISTS feed_entities
     original_ts_nanos INT,
     page_id           VARCHAR,
     content_type      VARCHAR NOT NULL,
-    body              BLOB    NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS feed_entities_page_index ON feed_entities (page_id);
-""", EmptySqlParameterSource()
+    body              BYTEA   NOT NULL
+)""",
+            EmptySqlParameterSource()
+        )
+        jdbc.update(
+            """CREATE INDEX IF NOT EXISTS feed_entities_page_index ON feed_entities (page_id)""",
+            EmptySqlParameterSource()
         )
     }
 
-    override fun append(entity: Entity<FeedEntityHeader>): CompletionStage<Void> = coro.future {
+    override fun append(entity: Entity<FeedEntityHeader>): CompletionStage<Void> = coro.future(Dispatchers.IO) {
         val params = mapOf(
             "content_id" to entity.header().contentId().value(),
             "operation_type" to entity.header().operationType().toString(),
@@ -77,78 +61,85 @@ CREATE INDEX IF NOT EXISTS feed_entities_page_index ON feed_entities (page_id);
             "content_type" to entity.body().contentType().value(),
             "body" to entity.body().toBytes()
         )
-
         jdbc.update(
             """--
 INSERT INTO feed_entities (content_id, operation_type, ts, ts_nanos, original_ts, original_ts_nanos, page_id,
                            content_type, body)
-VALUES (:content_id, :operation_type, :ts, :ts_nanos, :original_ts, :original_ts_nanos, :page_id, :content_type, :body)
-        """,
+VALUES (:content_id, :operation_type, :ts, :ts_nanos, :original_ts, :original_ts_nanos, :page_id, :content_type, :body)""",
             params
         )
-
         null
     }
 
-    override fun get(pageId: PageId): CompletionStage<MutableList<Entity<FeedEntityHeader>>> = coro.future {
-        val params = mapOf("page_id" to pageId.value())
-        jdbc.query(
-            """--
-                   SELECT content_id, operation_type, ts, ts_nanos, content_type, body FROM feed_entities WHERE page_id = :page_id ORDER BY ts, ts_nanos, content_id 
-                """, params,
-            ::getEntity
-        )
-    }
-
-    override fun getUnassigned(limit: Int): CompletionStage<MutableList<FeedEntityRepository.PageAssignment>> =
-        coro.future {
-            val params = mapOf("limit" to limit)
-            jdbc.query(
-                """--
-               SELECT content_id, ts, ts_nanos, original_ts, original_ts_nanos, length(body) AS content_length, page_id FROM feed_entities WHERE page_id IS NULL ORDER BY ts, ts_nanos, content_id LIMIT :limit 
-            """, params,
-                ::getPageAssignment
-            )
-        }
-
-    override fun getPageAssignments(pageId: PageId): CompletionStage<MutableList<FeedEntityRepository.PageAssignment>> =
-        coro.future {
+    override fun get(pageId: PageId): CompletionStage<MutableList<Entity<FeedEntityHeader>>> =
+        coro.future(Dispatchers.IO) {
             val params = mapOf("page_id" to pageId.value())
             jdbc.query(
                 """--
-SELECT content_id, ts, ts_nanos, original_ts, original_ts_nanos, length(body) AS content_length, page_id FROM feed_entities WHERE page_id = :page_id ORDER BY ts, ts_nanos, content_id
-            """,
+SELECT content_id, operation_type, ts, ts_nanos, content_type, body
+FROM feed_entities
+WHERE page_id = :page_id
+ORDER BY ts, ts_nanos, content_id""",
+                params,
+                ::getEntity
+            )
+        }
+
+    override fun getUnassigned(limit: Int): CompletionStage<MutableList<FeedEntityRepository.PageAssignment>> =
+        coro.future(Dispatchers.IO) {
+            val params = mapOf("limit" to limit)
+            jdbc.query(
+                """--
+SELECT content_id, ts, ts_nanos, original_ts, original_ts_nanos, length(body) AS content_length, page_id
+FROM feed_entities
+WHERE page_id IS NULL
+ORDER BY ts, ts_nanos, content_id
+LIMIT :limit""",
                 params,
                 ::getPageAssignment
             )
         }
 
-    override fun savePageAssignments(assignments: List<FeedEntityRepository.PageAssignment>): CompletionStage<Void> = coro.future {
-        val params = assignments.map { assignment ->
-            mapOf(
-                "content_id" to assignment.contentId().value(),
-                "ts" to assignment.lastModified().value().epochSecond,
-                "ts_nanos" to assignment.lastModified().value().nano,
-                "original_ts" to assignment.originalLastModified().getOrNull()?.value()?.epochSecond,
-                "original_ts_nanos" to assignment.originalLastModified().getOrNull()?.value()?.nano,
-                // not updating content_length is ok
-                "page_id" to assignment.pageId().getOrNull()?.value()
+    override fun getPageAssignments(pageId: PageId): CompletionStage<MutableList<FeedEntityRepository.PageAssignment>> =
+        coro.future(Dispatchers.IO) {
+            val params = mapOf("page_id" to pageId.value())
+            jdbc.query(
+                """--
+SELECT content_id, ts, ts_nanos, original_ts, original_ts_nanos, length(body) AS content_length, page_id
+FROM feed_entities
+WHERE page_id = :page_id
+ORDER BY ts, ts_nanos, content_id""",
+                params,
+                ::getPageAssignment
             )
         }
-        jdbc.batchUpdate(
-            """--
-               UPDATE feed_entities SET
-                    ts = :ts,
-                    ts_nanos = :ts_nanos,
-                    original_ts = :original_ts,
-                    original_ts_nanos = :original_ts_nanos,
-                    page_id = :page_id
-               WHERE content_id = :content_id
-            """,
-            params.toTypedArray()
-        )
-        null
-    }
+
+    override fun savePageAssignments(assignments: List<FeedEntityRepository.PageAssignment>): CompletionStage<Void> =
+        coro.future(Dispatchers.IO) {
+            val params = assignments.map { assignment ->
+                mapOf(
+                    "content_id" to assignment.contentId().value(),
+                    "ts" to assignment.lastModified().value().epochSecond,
+                    "ts_nanos" to assignment.lastModified().value().nano,
+                    "original_ts" to assignment.originalLastModified().getOrNull()?.value()?.epochSecond,
+                    "original_ts_nanos" to assignment.originalLastModified().getOrNull()?.value()?.nano,
+                    // not updating content_length is ok
+                    "page_id" to assignment.pageId().getOrNull()?.value()
+                )
+            }
+            jdbc.batchUpdate(
+                """--
+UPDATE feed_entities
+SET ts                = :ts,
+    ts_nanos          = :ts_nanos,
+    original_ts       = :original_ts,
+    original_ts_nanos = :original_ts_nanos,
+    page_id           = :page_id
+WHERE content_id = :content_id""",
+                params.toTypedArray()
+            )
+            null
+        }
 
     private fun getEntity(rs: ResultSet, idx: Int): Entity<FeedEntityHeader> {
         val contentId = ContentId.of(rs.getString("content_id")!!)

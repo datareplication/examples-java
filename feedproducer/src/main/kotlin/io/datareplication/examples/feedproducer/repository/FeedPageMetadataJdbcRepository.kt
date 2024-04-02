@@ -22,19 +22,21 @@ class FeedPageMetadataJdbcRepository(
     suspend fun init() = withContext(Dispatchers.IO) {
         jdbc.update(
             """--
-            CREATE TABLE IF NOT EXISTS feed_pages (
-            page_id TEXT NOT NULL PRIMARY KEY,
-            ts BIGINT NOT NULL,
-            ts_nanos INT NOT NULL,
-            prev TEXT,
-            next TEXT,
-            number_of_bytes BIGINT NOT NULL,
-            number_of_entities INT NOT NULL,
-            generation INT NOT NULL
-            );
-            
-            CREATE INDEX IF NOT EXISTS feed_pages_next_index ON feed_pages (next);
-        """,
+CREATE TABLE IF NOT EXISTS feed_pages
+(
+    page_id            TEXT   NOT NULL PRIMARY KEY,
+    ts                 BIGINT NOT NULL,
+    ts_nanos           INT    NOT NULL,
+    prev               TEXT,
+    next               TEXT,
+    number_of_bytes    BIGINT NOT NULL,
+    number_of_entities INT    NOT NULL,
+    generation         INT    NOT NULL
+)""",
+            EmptySqlParameterSource()
+        )
+        jdbc.update(
+            """CREATE INDEX IF NOT EXISTS feed_pages_next_index ON feed_pages (next)""",
             EmptySqlParameterSource()
         )
     }
@@ -44,8 +46,17 @@ class FeedPageMetadataJdbcRepository(
             val params = mapOf("page_id" to pageId.value())
             jdbc.query(
                 """--
-SELECT page_id, ts, ts_nanos, prev, next, number_of_bytes, number_of_entities, generation FROM feed_pages WHERE page_id = :page_id LIMIT 1                
-            """,
+SELECT page_id,
+       ts,
+       ts_nanos,
+       prev,
+       next,
+       number_of_bytes,
+       number_of_entities,
+       generation
+FROM feed_pages
+WHERE page_id = :page_id
+LIMIT 1""",
                 params,
                 ::getPageMetadata
             )
@@ -57,8 +68,16 @@ SELECT page_id, ts, ts_nanos, prev, next, number_of_bytes, number_of_entities, g
         coro.future(Dispatchers.IO) {
             jdbc.query(
                 """--
-               SELECT page_id, ts, ts_nanos, prev, next, number_of_bytes, number_of_entities, generation FROM feed_pages WHERE next IS NULL
-            """,
+SELECT page_id,
+       ts,
+       ts_nanos,
+       prev,
+       next,
+       number_of_bytes,
+       number_of_entities,
+       generation
+FROM feed_pages
+WHERE next IS NULL""",
                 EmptySqlParameterSource(),
                 ::getPageMetadata
             )
@@ -78,12 +97,17 @@ SELECT page_id, ts, ts_nanos, prev, next, number_of_bytes, number_of_entities, g
                     "generation" to page.generation()
                 )
             }
-
             jdbc.batchUpdate(
                 """--
-INSERT OR REPLACE INTO feed_pages (page_id, ts, ts_nanos, prev, next, number_of_bytes, number_of_entities, generation) VALUES (
-                :page_id, :ts, :ts_nanos, :prev, :next, :number_of_bytes, :number_of_entities, :generation)
-            """,
+INSERT INTO feed_pages (page_id, ts, ts_nanos, prev, next, number_of_bytes, number_of_entities, generation)
+VALUES (:page_id, :ts, :ts_nanos, :prev, :next, :number_of_bytes, :number_of_entities, :generation)
+ON CONFLICT (page_id) DO UPDATE SET ts                 = excluded.ts,
+                                    ts_nanos           = excluded.ts_nanos,
+                                    prev               = excluded.prev,
+                                    next               = excluded.next,
+                                    number_of_bytes    = excluded.number_of_bytes,
+                                    number_of_entities = excluded.number_of_entities,
+                                    generation         = excluded.generation""",
                 params.toTypedArray()
             )
             null
@@ -92,9 +116,7 @@ INSERT OR REPLACE INTO feed_pages (page_id, ts, ts_nanos, prev, next, number_of_
     override fun delete(pageIds: List<PageId>): CompletionStage<Void> = coro.future(Dispatchers.IO) {
         val params = pageIds.map { pageId -> mapOf("page_id" to pageId.value()) }
         jdbc.batchUpdate(
-            """--
-           DELETE FROM feed_pages WHERE page_id = :page_id 
-        """,
+            """DELETE FROM feed_pages WHERE page_id = :page_id""",
             params.toTypedArray()
         )
         null
