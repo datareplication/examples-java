@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.future
 import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.EmptySqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import java.sql.ResultSet
@@ -19,6 +20,8 @@ class FeedPageMetadataJdbcRepository(
     private val jdbc: NamedParameterJdbcTemplate,
     private val coro: CoroutineScope
 ) : FeedPageMetadataRepository {
+    private val logger = LoggerFactory.getLogger(this::class.java)
+
     suspend fun init() = withContext(Dispatchers.IO) {
         jdbc.update(
             """--
@@ -44,8 +47,9 @@ CREATE TABLE IF NOT EXISTS feed_pages
     override fun get(pageId: PageId): CompletionStage<Optional<FeedPageMetadataRepository.PageMetadata>> =
         coro.future(Dispatchers.IO) {
             val params = mapOf("page_id" to pageId.value())
-            jdbc.query(
-                """--
+            timed(logger, "get") {
+                jdbc.query(
+                    """--
 SELECT page_id,
        ts,
        ts_nanos,
@@ -57,17 +61,19 @@ SELECT page_id,
 FROM feed_pages
 WHERE page_id = :page_id
 LIMIT 1""",
-                params,
-                ::getPageMetadata
-            )
-                .singleOrNull()
-                .let { Optional.ofNullable(it) }
+                    params,
+                    ::getPageMetadata
+                )
+                    .singleOrNull()
+                    .let { Optional.ofNullable(it) }
+            }
         }
 
     override fun getWithoutNextLink(): CompletionStage<MutableList<FeedPageMetadataRepository.PageMetadata>> =
         coro.future(Dispatchers.IO) {
-            jdbc.query(
-                """--
+            timed(logger, "getWithoutNextLink") {
+                jdbc.query(
+                    """--
 SELECT page_id,
        ts,
        ts_nanos,
@@ -78,9 +84,10 @@ SELECT page_id,
        generation
 FROM feed_pages
 WHERE next IS NULL""",
-                EmptySqlParameterSource(),
-                ::getPageMetadata
-            )
+                    EmptySqlParameterSource(),
+                    ::getPageMetadata
+                )
+            }
         }
 
     override fun save(pages: List<FeedPageMetadataRepository.PageMetadata>): CompletionStage<Void> =
@@ -97,8 +104,9 @@ WHERE next IS NULL""",
                     "generation" to page.generation()
                 )
             }
-            jdbc.batchUpdate(
-                """--
+            timed(logger, "save") {
+                jdbc.batchUpdate(
+                    """--
 INSERT INTO feed_pages (page_id, ts, ts_nanos, prev, next, number_of_bytes, number_of_entities, generation)
 VALUES (:page_id, :ts, :ts_nanos, :prev, :next, :number_of_bytes, :number_of_entities, :generation)
 ON CONFLICT (page_id) DO UPDATE SET ts                 = excluded.ts,
@@ -108,18 +116,21 @@ ON CONFLICT (page_id) DO UPDATE SET ts                 = excluded.ts,
                                     number_of_bytes    = excluded.number_of_bytes,
                                     number_of_entities = excluded.number_of_entities,
                                     generation         = excluded.generation""",
-                params.toTypedArray()
-            )
-            null
+                    params.toTypedArray()
+                )
+                null
+            }
         }
 
     override fun delete(pageIds: List<PageId>): CompletionStage<Void> = coro.future(Dispatchers.IO) {
         val params = pageIds.map { pageId -> mapOf("page_id" to pageId.value()) }
-        jdbc.batchUpdate(
-            """DELETE FROM feed_pages WHERE page_id = :page_id""",
-            params.toTypedArray()
-        )
-        null
+        timed(logger, "delete") {
+            jdbc.batchUpdate(
+                """DELETE FROM feed_pages WHERE page_id = :page_id""",
+                params.toTypedArray()
+            )
+            null
+        }
     }
 
     private fun getPageMetadata(rs: ResultSet, idx: Int): FeedPageMetadataRepository.PageMetadata {

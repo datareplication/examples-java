@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.future
 import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.namedparam.EmptySqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import java.sql.ResultSet
@@ -25,6 +26,8 @@ class FeedEntityJdbcRepository(
     private val jdbc: NamedParameterJdbcTemplate,
     private val coro: CoroutineScope
 ) : FeedEntityRepository {
+    private val logger = LoggerFactory.getLogger(this::class.java)
+
     // TODO extraHeaders
     suspend fun init() = withContext(Dispatchers.IO) {
         jdbc.update(
@@ -61,57 +64,65 @@ CREATE TABLE IF NOT EXISTS feed_entities
             "content_type" to entity.body().contentType().value(),
             "body" to entity.body().toBytes()
         )
-        jdbc.update(
-            """--
+        timed(logger, "append") {
+            jdbc.update(
+                """--
 INSERT INTO feed_entities (content_id, operation_type, ts, ts_nanos, original_ts, original_ts_nanos, page_id,
                            content_type, body)
 VALUES (:content_id, :operation_type, :ts, :ts_nanos, :original_ts, :original_ts_nanos, :page_id, :content_type, :body)""",
-            params
-        )
-        null
+                params
+            )
+            null
+        }
     }
 
     override fun get(pageId: PageId): CompletionStage<MutableList<Entity<FeedEntityHeader>>> =
         coro.future(Dispatchers.IO) {
             val params = mapOf("page_id" to pageId.value())
-            jdbc.query(
-                """--
+            timed(logger, "get") {
+                jdbc.query(
+                    """--
 SELECT content_id, operation_type, ts, ts_nanos, content_type, body
 FROM feed_entities
 WHERE page_id = :page_id
 ORDER BY ts, ts_nanos, content_id""",
-                params,
-                ::getEntity
-            )
+                    params,
+                    ::getEntity
+                )
+            }
         }
 
     override fun getUnassigned(limit: Int): CompletionStage<MutableList<FeedEntityRepository.PageAssignment>> =
         coro.future(Dispatchers.IO) {
             val params = mapOf("limit" to limit)
-            jdbc.query(
-                """--
+            timed(logger, "getUnassigned") {
+                jdbc.query(
+                    """--
 SELECT content_id, ts, ts_nanos, original_ts, original_ts_nanos, length(body) AS content_length, page_id
 FROM feed_entities
 WHERE page_id IS NULL
 ORDER BY ts, ts_nanos, content_id
 LIMIT :limit""",
-                params,
-                ::getPageAssignment
-            )
+                    params,
+                    ::getPageAssignment
+                )
+            }
         }
 
     override fun getPageAssignments(pageId: PageId): CompletionStage<MutableList<FeedEntityRepository.PageAssignment>> =
         coro.future(Dispatchers.IO) {
             val params = mapOf("page_id" to pageId.value())
-            jdbc.query(
-                """--
+            timed(logger, "getPageAssignments") {
+                jdbc.query(
+                    """--
 SELECT content_id, ts, ts_nanos, original_ts, original_ts_nanos, length(body) AS content_length, page_id
 FROM feed_entities
 WHERE page_id = :page_id
 ORDER BY ts, ts_nanos, content_id""",
-                params,
-                ::getPageAssignment
-            )
+                    params,
+                    ::getPageAssignment
+                )
+            }
         }
 
     override fun savePageAssignments(assignments: List<FeedEntityRepository.PageAssignment>): CompletionStage<Void> =
@@ -127,8 +138,9 @@ ORDER BY ts, ts_nanos, content_id""",
                     "page_id" to assignment.pageId().getOrNull()?.value()
                 )
             }
-            jdbc.batchUpdate(
-                """--
+            timed(logger, "savePageAssignments") {
+                jdbc.batchUpdate(
+                    """--
 UPDATE feed_entities
 SET ts                = :ts,
     ts_nanos          = :ts_nanos,
@@ -136,9 +148,10 @@ SET ts                = :ts,
     original_ts_nanos = :original_ts_nanos,
     page_id           = :page_id
 WHERE content_id = :content_id""",
-                params.toTypedArray()
-            )
-            null
+                    params.toTypedArray()
+                )
+                null
+            }
         }
 
     private fun getEntity(rs: ResultSet, idx: Int): Entity<FeedEntityHeader> {
