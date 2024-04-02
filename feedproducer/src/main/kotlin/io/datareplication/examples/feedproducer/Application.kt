@@ -51,7 +51,6 @@ suspend fun assignPagesTask(interval: Duration, feedProducer: FeedProducer) {
 
 fun main(args: Array<String>) {
     val config = ConfigFactory.load()
-    Path("./data").createDirectories()
     val hikariConfig = HikariConfig().apply {
         jdbcUrl = config.getString("db.url")
         maximumPoolSize = 1
