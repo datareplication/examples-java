@@ -51,11 +51,16 @@ suspend fun assignPagesTask(interval: Duration, feedProducer: FeedProducer) {
 fun main(args: Array<String>) {
     val config = ConfigFactory.load()
     val jdbc = run {
-        val props = Properties()
-        for (entry in config.getConfig("db").entrySet()) {
-            props[entry.key] = entry.value.unwrapped()
+        val hikariProps = Properties()
+        for (entry in config.getConfig("db.hikari").entrySet()) {
+            hikariProps[entry.key] = entry.value.unwrapped()
         }
-        val dbConfig = HikariConfig(props)
+        val dataSourceProps = Properties()
+        for (entry in config.getConfig("db.dataSourceProperties").entrySet()) {
+            dataSourceProps[entry.key] = entry.value.unwrapped()
+        }
+        val dbConfig = HikariConfig(hikariProps)
+        dbConfig.dataSourceProperties = dataSourceProps
         val dataSource = HikariDataSource(dbConfig)
         NamedParameterJdbcTemplate(dataSource)
     }
