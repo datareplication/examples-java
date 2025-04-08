@@ -5,6 +5,7 @@ build/
 !**/src/test/**/build/
 **/resources/local.conf
 /data/**
+libs/
 
 # IDEs
 .idea

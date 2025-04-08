@@ -18,6 +18,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.head
 import io.ktor.server.routing.routing
 import io.ktor.utils.io.jvm.javaio.copyTo
+import io.ktor.utils.io.jvm.javaio.toOutputStream
 import kotlinx.coroutines.future.await
 import kotlin.jvm.optionals.getOrNull
 
@@ -31,7 +32,7 @@ private suspend fun respondGet(call: ApplicationCall, page: Page<FeedPageHeader,
     call.respondBytesWriter(
         contentType = ContentType.parse(body.contentType().value()),
         contentLength = body.contentLength()
-    ) { body.newInputStream().copyTo(this) }
+    ) { body.newInputStream().copyTo(this.toOutputStream()) }
 }
 
 private suspend fun respondHead(call: ApplicationCall, pageHeader: FeedPageProvider.HeaderAndContentType) {

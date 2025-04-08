@@ -1,7 +1,6 @@
 package io.datareplication.examples.feedproducer.repository
 
 import io.datareplication.model.PageId
-import io.datareplication.model.Timestamp
 import io.datareplication.producer.feed.FeedPageMetadataRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -95,8 +94,8 @@ WHERE next IS NULL""",
             val params = pages.map { page ->
                 mapOf(
                     "page_id" to page.pageId().value(),
-                    "ts" to page.lastModified().value().epochSecond,
-                    "ts_nanos" to page.lastModified().value().nano,
+                    "ts" to page.lastModified().epochSecond,
+                    "ts_nanos" to page.lastModified().nano,
                     "prev" to page.prev().getOrNull()?.value(),
                     "next" to page.next().getOrNull()?.value(),
                     "number_of_bytes" to page.numberOfBytes(),
@@ -137,7 +136,7 @@ ON CONFLICT (page_id) DO UPDATE SET ts                 = excluded.ts,
         val pageId = PageId.of(rs.getString("page_id")!!)
         val ts = rs.getLong("ts")
         val tsNanos = rs.getLong("ts_nanos")
-        val lastModified = Timestamp.of(Instant.ofEpochSecond(ts, tsNanos))
+        val lastModified = Instant.ofEpochSecond(ts, tsNanos)
         val prev = rs.getString("prev")?.let(PageId::of)
         val next = rs.getString("next")?.let(PageId::of)
         val numberOfBytes = rs.getLong("number_of_bytes")

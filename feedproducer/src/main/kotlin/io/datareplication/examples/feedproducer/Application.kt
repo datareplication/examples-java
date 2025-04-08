@@ -10,15 +10,14 @@ import io.datareplication.model.Url
 import io.datareplication.producer.feed.FeedPageProvider
 import io.datareplication.producer.feed.FeedProducer
 import io.ktor.server.config.HoconApplicationConfig
-import io.ktor.server.engine.applicationEngineEnvironment
 import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import java.util.Properties
+import kotlin.collections.set
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
-import java.util.Properties
-import kotlin.collections.set
 
 fun main(args: Array<String>) {
     val config = ConfigFactory.load()
@@ -61,17 +60,15 @@ fun main(args: Array<String>) {
             ) { pageId -> Url.of("$feedBaseUrl/feed/${pageId.value()}") }
             .build()
 
-        val env = applicationEngineEnvironment {
-            this.config = HoconApplicationConfig(config)
-            developmentMode = developmentMode or config.getBoolean("ktor.development")
-            connector {
-                port = config.getInt("ktor.deployment.port")
+        val httpEngine = embeddedServer(
+            factory = Netty,
+            configure = {
+                connector { port = config.getInt("ktor.deployment.port") }
+                HoconApplicationConfig(config)
             }
-            module {
-                feedProducerRoutes(feedPageProvider)
-            }
+        ) {
+            feedProducerRoutes(feedPageProvider)
         }
-        val httpEngine = embeddedServer(Netty, env)
         httpEngine.start(wait = false)
         runProducer(config, feedProducer, this)
         awaitCancellation()
