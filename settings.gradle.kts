@@ -3,3 +3,4 @@ plugins {
 }
 rootProject.name = "examples-java"
 include("feedproducer")
+include("feedconsumer")
