@@ -4,7 +4,6 @@ import io.datareplication.model.Body
 import io.datareplication.model.ContentType
 import io.datareplication.model.Entity
 import io.datareplication.model.PageId
-import io.datareplication.model.Timestamp
 import io.datareplication.model.feed.ContentId
 import io.datareplication.model.feed.FeedEntityHeader
 import io.datareplication.model.feed.OperationType
@@ -56,8 +55,8 @@ CREATE TABLE IF NOT EXISTS feed_entities
         val params = mapOf(
             "content_id" to entity.header().contentId().value(),
             "operation_type" to entity.header().operationType().toString(),
-            "ts" to entity.header().lastModified().value().epochSecond,
-            "ts_nanos" to entity.header().lastModified().value().nano,
+            "ts" to entity.header().lastModified().epochSecond,
+            "ts_nanos" to entity.header().lastModified().nano,
             "original_ts" to null,
             "original_ts_nanos" to null,
             "page_id" to null,
@@ -130,10 +129,10 @@ ORDER BY ts, ts_nanos, content_id""",
             val params = assignments.map { assignment ->
                 mapOf(
                     "content_id" to assignment.contentId().value(),
-                    "ts" to assignment.lastModified().value().epochSecond,
-                    "ts_nanos" to assignment.lastModified().value().nano,
-                    "original_ts" to assignment.originalLastModified().getOrNull()?.value()?.epochSecond,
-                    "original_ts_nanos" to assignment.originalLastModified().getOrNull()?.value()?.nano,
+                    "ts" to assignment.lastModified().epochSecond,
+                    "ts_nanos" to assignment.lastModified().nano,
+                    "original_ts" to assignment.originalLastModified().getOrNull()?.epochSecond,
+                    "original_ts_nanos" to assignment.originalLastModified().getOrNull()?.nano,
                     // not updating content_length is ok
                     "page_id" to assignment.pageId().getOrNull()?.value()
                 )
@@ -159,7 +158,7 @@ WHERE content_id = :content_id""",
         val operationType = OperationType.valueOf(rs.getString("operation_type")!!)
         val ts = rs.getLong("ts")
         val tsNanos = rs.getLong("ts_nanos")
-        val lastModified = Timestamp.of(Instant.ofEpochSecond(ts, tsNanos))
+        val lastModified = Instant.ofEpochSecond(ts, tsNanos)
         val contentType = ContentType.of(rs.getString("content_type")!!)
         val bodyBytes = rs.getBytes("body")
         return Entity(
@@ -178,9 +177,9 @@ WHERE content_id = :content_id""",
         val tsNanos = rs.getLong("ts_nanos")
         val originalTs = rs.getLong("original_ts").takeIf { it > 0 }
         val originalTsNanos = rs.getLong("original_ts_nanos")
-        val lastModified = Timestamp.of(Instant.ofEpochSecond(ts, tsNanos))
+        val lastModified = Instant.ofEpochSecond(ts, tsNanos)
         val originalLastModified =
-            originalTs?.let { Instant.ofEpochSecond(it, originalTsNanos) }?.let(Timestamp::of)
+            originalTs?.let { Instant.ofEpochSecond(it, originalTsNanos) }
         val contentLength = rs.getLong("content_length")
         val pageId = rs.getString("page_id")?.let(PageId::of)
         return FeedEntityRepository.PageAssignment(
