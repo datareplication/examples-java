@@ -17,7 +17,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.datareplication:datareplication:1.0.0-rc1")
+    implementation("io.datareplication:datareplication:1.0.0")
 
     implementation(platform("io.ktor:ktor-bom:3.0.3"))
     implementation("io.ktor:ktor-server-core-jvm")

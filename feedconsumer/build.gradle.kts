@@ -15,7 +15,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.datareplication:datareplication:1.0.0-rc1")
+    implementation("io.datareplication:datareplication:1.0.0")
 
     implementation("com.typesafe:config:1.4.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
