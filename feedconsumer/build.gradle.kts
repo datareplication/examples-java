@@ -12,18 +12,10 @@ application {
 
 repositories {
     mavenCentral()
-    maven {
-        name = "GitHubPackages"
-        url = uri("https://maven.pkg.github.com/datareplication/datareplication-java")
-        credentials {
-            username = project.findProperty("datareplication.username") as String?
-            password = findProperty("datareplication.password") as String?
-        }
-    }
 }
 
 dependencies {
-    implementation("io.datareplication:datareplication:1.0.0")
+    implementation("io.datareplication:datareplication:1.0.0-rc1")
 
     implementation("com.typesafe:config:1.4.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
